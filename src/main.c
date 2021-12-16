@@ -6,7 +6,7 @@
 #include "esp_sleep.h"
 #include "sdkconfig.h"
 
-
+#include "driver/adc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -14,11 +14,14 @@
 
 static const char* TAG = "Timer";
 
+
 #define GPIO_INPUT_IO_0     33
 #define GPIO_INPUT_IO_1     32
 //or de 1 para cada pin que se quiera configurar
 #define GPIO_INPUT_PIN_SEL  ((1ULL<<GPIO_INPUT_IO_0) | (1ULL<<GPIO_INPUT_IO_1))
 #define ESP_INTR_FLAG_DEFAULT 0
+
+int min = 0, seg = 0;
 
 static xQueueHandle gpio_evt_queue = NULL;
 
@@ -33,24 +36,23 @@ static void IRAM_ATTR gpio_isr_handler(void* arg)
 static void gpio_task_chronometer(void* arg)
 {
     uint32_t io_num;
-    int min = 0, seg = 0;
+    //int min = 0, seg = 0;
     //int start = 1;   
 
     while (1){
         
         int start = 1;
         int activar_start = 1;
+        //int sensor = sensorHall();
+        //int sensor = 25;
+        
         
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            //printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-            
-            
+            //printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));           
             start = gpio_get_level(io_num);
             if ( start == 0 ){
                 if ( activar_start == 1 ) // verificamos si el boton de inicio esta activado 
                 {
-                    //min = 0;
-                    //seg = 0;
                     seg ++ ;
                     //printf("seg %d \n", seg);
                     if ( seg == 60 ){
@@ -60,19 +62,14 @@ static void gpio_task_chronometer(void* arg)
                             min = 0;
                         }
                     }
-                    
                 }
                 
             }
-            
-            
         }
         //vTaskDelay(100 / portTICK_RATE_MS);
         printf ("CHRONOMETER\t: min: %d, seg: %d \n", min, seg);
         
     }
-    
-    
 }
 
 
@@ -117,16 +114,31 @@ static void timer (){
     ESP_LOGI (TAG, " Temporizadores detenidos y eliminados " );
 }
 
-/*
-static void sensorHall(){
 
+static void sensorHall(){
+    /*
     Dispondrá de una entrada Reset que pondrá a 0 la cuenta y parará el cronómetro.
         • Se implementará muestreando el sensor de efecto Hall. Cuando supere un umbral, se
            considerará activo.
+    */
+    while(1){
+
+        int hall = 0, umbral = 50;
+        adc1_config_width(ADC_WIDTH_BIT_12);        
+        hall = hall_sensor_read();
+        //printf("Sensor Hall fuere del if %d \n", hall);       
+        if (hall > umbral ){                        
+            printf("Sensor Hall Activo %d \n", hall);
+            min = 0;
+            seg = 0;
+        }
+        vTaskDelay(500 / portTICK_RATE_MS);
+    }
+    
     
     
 }
-*/
+
 
 
 void app_main(void)
@@ -160,4 +172,6 @@ void app_main(void)
 
     //**************************************************************************************************************************************************
     timer();
+    sensorHall();
+    
 }
